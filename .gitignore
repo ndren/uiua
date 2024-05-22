@@ -2,8 +2,6 @@
 .idea
 .DS_Store
 /target
-/docs
-/site/blog/*.html
 site/dist
 /uiua-modules
 
