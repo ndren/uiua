@@ -68,6 +68,10 @@ impl<T: ArrayValue> Array<T> {
             len: 0,
             fix_stack: Vec::new(),
         };
+        // When keys are sorted, the collision likelihood and map size is fast to calculate
+        if keys.meta.is_sorted_up() || keys.meta.is_sorted_down() {
+            map_keys.grow_to(((keys.count_unique() as f64 / LOAD_FACTOR) as usize).max(1));
+        }
         let mut to_remove = Vec::new();
         for (i, key) in keys.into_rows().enumerate() {
             let replaced = map_keys.insert(key, i, ctx)?;
