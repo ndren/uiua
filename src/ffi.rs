@@ -3,7 +3,6 @@ use std::{
     str::FromStr,
 };
 
-
 /// Data for how to send an argument type to `&ffi`
 #[derive(Debug)]
 pub struct FfiArg {
@@ -184,7 +183,10 @@ impl FromStr for FfiType {
             if depth != 0 {
                 return Err(format!("Unmatched opening braces `{original}`"));
             } else {
-                eprintln!("[DEBUG] FfiType::from_str: parsed struct fields={}", fields.len());
+                eprintln!(
+                    "[DEBUG] FfiType::from_str: parsed struct fields={}",
+                    fields.len()
+                );
                 return Ok(Self::Struct(fields));
             }
         }
@@ -258,7 +260,10 @@ mod enabled {
             let len = bytes.len();
             if len == 0 {
                 eprintln!("[DEBUG] AlignedBuffer::new: returning empty");
-                return Self { data: Vec::new(), len: 0 };
+                return Self {
+                    data: Vec::new(),
+                    len: 0,
+                };
             }
 
             // Calculate how many u64s we need to fit `len` bytes
@@ -268,11 +273,7 @@ mod enabled {
 
             eprintln!("[DEBUG] AlignedBuffer::new: copying memory");
             unsafe {
-                std::ptr::copy_nonoverlapping(
-                    bytes.as_ptr(),
-                    data.as_mut_ptr() as *mut u8,
-                    len,
-                );
+                std::ptr::copy_nonoverlapping(bytes.as_ptr(), data.as_mut_ptr() as *mut u8, len);
             }
             eprintln!("[DEBUG] AlignedBuffer::new: memory copy complete");
 
@@ -308,8 +309,11 @@ mod enabled {
             arg_tys: &[FfiArg],
             mut arg_values: Vec<Value>,
         ) -> Result<Value, String> {
-            eprintln!("[DEBUG] FfiState::do_ffi: entry. file={:?}, name={:?}, return_ty={:?}, arg_tys={:?}", file, name, return_ty, arg_tys);
-            
+            eprintln!(
+                "[DEBUG] FfiState::do_ffi: entry. file={:?}, name={:?}, return_ty={:?}, arg_tys={:?}",
+                file, name, return_ty, arg_tys
+            );
+
             let code_ptr = {
                 eprintln!("[DEBUG] do_ffi: finding symbol");
                 if !self.libraries.contains_key(file) {
@@ -322,7 +326,10 @@ mod enabled {
                 eprintln!("[DEBUG] do_ffi: fetching symbol {}", name);
                 let func_ptr: libloading::Symbol<unsafe extern "C" fn()> =
                     unsafe { lib.get(name.as_bytes()) }.map_err(|e| e.to_string())?;
-                eprintln!("[DEBUG] do_ffi: symbol fetched, code_ptr={:p}", *func_ptr as *const ());
+                eprintln!(
+                    "[DEBUG] do_ffi: symbol fetched, code_ptr={:p}",
+                    *func_ptr as *const ()
+                );
                 CodePtr::from_fun(*func_ptr)
             };
 
@@ -339,15 +346,21 @@ mod enabled {
             // Pointers to out parameters
             let mut out_params = Vec::new();
 
-            eprintln!("[DEBUG] do_ffi: preparing args data loop. args count = {}", arg_tys.len());
+            eprintln!(
+                "[DEBUG] do_ffi: preparing args data loop. args count = {}",
+                arg_tys.len()
+            );
             for (i, (arg, value)) in zip(arg_tys, arg_values).enumerate() {
                 let value_len = value.row_count();
                 let value_is_ptr = value.meta().pointer.is_some();
-                eprintln!("[DEBUG] do_ffi: preparing arg {}, type={}, out={}, value_len={}, is_ptr={}", i, arg.ty, arg.out, value_len, value_is_ptr);
+                eprintln!(
+                    "[DEBUG] do_ffi: preparing arg {}, type={}, out={}, value_len={}, is_ptr={}",
+                    i, arg.ty, arg.out, value_len, value_is_ptr
+                );
 
                 let (repr, buffer) = arg.ty.repr(value)?;
                 eprintln!("[DEBUG] do_ffi: arg {} repr generated, len={}", i, repr.len);
-                
+
                 if arg.out {
                     if arg.ty.is_ptr() {
                         eprintln!("[DEBUG] do_ffi: arg {} is out ptr", i);
@@ -361,19 +374,23 @@ mod enabled {
                             if value_is_ptr { None } else { Some(value_len) },
                         ));
                         for buffer in buffer {
-                            eprintln!("[DEBUG] do_ffi: arg {} inserting side buffer at {:#x}", i, buffer.as_ptr() as usize);
+                            eprintln!(
+                                "[DEBUG] do_ffi: arg {} inserting side buffer at {:#x}",
+                                i,
+                                buffer.as_ptr() as usize
+                            );
                             self.buffers.insert(buffer.as_ptr() as usize, buffer);
                         }
                     } else {
                         eprintln!("[DEBUG] do_ffi: arg {} is regular out param", i);
                         let (out_repr, out_buffer) = FfiType::data_to_buffer(repr.as_slice());
-                        let ptr = usize::from_ne_bytes(out_repr.as_slice().try_into().unwrap()) as *const u8;
-                        eprintln!("[DEBUG] do_ffi: arg {} allocated out buffer at {:#x}", i, ptr as usize);
-                        out_params.push((
-                            ptr,
-                            arg.ty.clone(),
-                            None,
-                        ));
+                        let ptr = usize::from_ne_bytes(out_repr.as_slice().try_into().unwrap())
+                            as *const u8;
+                        eprintln!(
+                            "[DEBUG] do_ffi: arg {} allocated out buffer at {:#x}",
+                            i, ptr as usize
+                        );
+                        out_params.push((ptr, arg.ty.clone(), None));
                         buffers.push(out_buffer);
                         buffers.extend(buffer);
                         reprs.push(out_repr);
@@ -402,19 +419,28 @@ mod enabled {
 
             eprintln!("[DEBUG] do_ffi: invoking call(...)");
             let return_repr = unsafe { call(&cif, code_ptr, &c_args, return_ty.size()) };
-            eprintln!("[DEBUG] do_ffi: call(...) returned successfully, ret len={}", return_repr.len());
-            
+            eprintln!(
+                "[DEBUG] do_ffi: call(...) returned successfully, ret len={}",
+                return_repr.len()
+            );
+
             eprintln!("[DEBUG] do_ffi: unrepr return value");
             let ret = return_ty.unrepr(&return_repr)?;
 
-            eprintln!("[DEBUG] do_ffi: collecting out params (count={})", out_params.len());
+            eprintln!(
+                "[DEBUG] do_ffi: collecting out params (count={})",
+                out_params.len()
+            );
             let rets = if out_params.is_empty() {
                 ret
             } else {
                 let out_values = out_params
                     .into_iter()
                     .map(|(ptr, ty, len)| {
-                        eprintln!("[DEBUG] do_ffi: unrepr out param ptr={:p}, ty={}, len={:?}", ptr, ty, len);
+                        eprintln!(
+                            "[DEBUG] do_ffi: unrepr out param ptr={:p}, ty={}, len={:?}",
+                            ptr, ty, len
+                        );
                         if let FfiType::Ptr(ty) = ty {
                             let meta_ptr = MetaPtr::new(ptr as usize, *ty);
                             if let Some(len) = len {
@@ -426,13 +452,16 @@ mod enabled {
                             }
                         } else {
                             // SAFETY: this should never fail because the data should be allocated in [`buffers`]
-                            eprintln!("[DEBUG] do_ffi: unrepr standard out slice, size={}", ty.size());
+                            eprintln!(
+                                "[DEBUG] do_ffi: unrepr standard out slice, size={}",
+                                ty.size()
+                            );
                             let repr = unsafe { slice::from_raw_parts(ptr, ty.size()) };
                             ty.unrepr(repr)
                         }
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                
+
                 eprintln!("[DEBUG] do_ffi: grouping outputs");
                 if out_values.len() == 1 && return_ty == FfiType::Void {
                     let mut out_values = out_values;
@@ -565,12 +594,18 @@ mod enabled {
         let cstr = unsafe { CStr::from_ptr(ptr) };
         eprintln!("[DEBUG] cstr_to_value: CStr parsed");
         let str = cstr.to_str().map_err(|e| e.to_string())?;
-        eprintln!("[DEBUG] cstr_to_value: converted to string, len={}", str.len());
+        eprintln!(
+            "[DEBUG] cstr_to_value: converted to string, len={}",
+            str.len()
+        );
         Ok(str.into())
     }
 
     pub(crate) fn ffi_copy(ptr: MetaPtr, len: usize) -> Result<Value, String> {
-        eprintln!("[DEBUG] ffi_copy: ptr={:#x}, len={}, ty={}", ptr.ptr, len, ptr.ty);
+        eprintln!(
+            "[DEBUG] ffi_copy: ptr={:#x}, len={}, ty={}",
+            ptr.ptr, len, ptr.ty
+        );
         if ptr.get().is_null() && len != 0 {
             return Err("Cannot read from a null pointer".to_string());
         }
@@ -626,7 +661,10 @@ mod enabled {
     }
 
     pub(crate) fn ffi_set(ptr: MetaPtr, index: usize, value: Value) -> Result<(), String> {
-        eprintln!("[DEBUG] ffi_set: ptr={:#x}, index={}, type={}", ptr.ptr, index, ptr.ty);
+        eprintln!(
+            "[DEBUG] ffi_set: ptr={:#x}, index={}, type={}",
+            ptr.ptr, index, ptr.ty
+        );
         if ptr.ptr == 0 {
             return Err("Cannot write to a null pointer".to_string());
         }
@@ -634,16 +672,16 @@ mod enabled {
         let size = ty.size();
         let offset = size * index;
         eprintln!("[DEBUG] ffi_set: offset={}", offset);
-        
+
         eprintln!("[DEBUG] ffi_set: slice::from_raw_parts_mut");
         let dest = unsafe { slice::from_raw_parts_mut((ptr.ptr + offset) as *mut u8, size) };
-        
+
         eprintln!("[DEBUG] ffi_set: preparing repr");
         let (repr, _) = ty.repr(value)?;
-        
+
         eprintln!("[DEBUG] ffi_set: copy_from_slice");
         dest.copy_from_slice(repr.as_slice());
-        
+
         eprintln!("[DEBUG] ffi_set: completed");
         Ok(())
     }
@@ -762,7 +800,10 @@ mod enabled {
             }
             size = size.div_ceil(align) * align;
 
-            eprintln!("[DEBUG] struct_size_align_offsets: ret size={}, align={}, offsets={:?}", size, align, offsets);
+            eprintln!(
+                "[DEBUG] struct_size_align_offsets: ret size={}, align={}, offsets={:?}",
+                size, align, offsets
+            );
             ((size, align), offsets)
         }
 
@@ -776,13 +817,20 @@ mod enabled {
         }
 
         fn repr(&self, value: Value) -> Result<Buffers, String> {
-            eprintln!("[DEBUG] FfiType::repr: type={}, shape len={}", self, value.shape.len());
+            eprintln!(
+                "[DEBUG] FfiType::repr: type={}, shape len={}",
+                self,
+                value.shape.len()
+            );
             if self == &FfiType::Void {
                 return Err("Void cannot be in an argument type".to_string());
             }
 
             if let Some(ptr) = value.meta.pointer.as_ref() {
-                eprintln!("[DEBUG] FfiType::repr: handling existing pointer {:#x}", ptr.ptr);
+                eprintln!(
+                    "[DEBUG] FfiType::repr: handling existing pointer {:#x}",
+                    ptr.ptr
+                );
                 return if matches!(self, FfiType::Ptr(_)) {
                     Ok((AlignedBuffer::new(&ptr.ptr.to_ne_bytes()), Vec::new()))
                 } else {
@@ -839,11 +887,11 @@ mod enabled {
                 (FfiType::Ptr(ty), value) => {
                     eprintln!("[DEBUG] FfiType::repr: FfiType::Ptr branch");
                     ty.repr_arr(value, true)?
-                },
+                }
                 (FfiType::Struct(fields), value) => {
                     eprintln!("[DEBUG] FfiType::repr: FfiType::Struct branch");
                     FfiType::repr_struct(fields, value)?
-                },
+                }
 
                 (ty, value) => {
                     eprintln!("[DEBUG] FfiType::repr: fallback error path");
@@ -858,7 +906,11 @@ mod enabled {
         /// Marshall some bytes containing a C type into a [`Value`].
         /// Assumes length of the bytes is the same as the size of the type.
         fn unrepr(&self, repr: &[u8]) -> Result<Value, String> {
-            eprintln!("[DEBUG] FfiType::unrepr: type={}, repr.len={}", self, repr.len());
+            eprintln!(
+                "[DEBUG] FfiType::unrepr: type={}, repr.len={}",
+                self,
+                repr.len()
+            );
             macro_rules! value {
                 ($c_ty:ty $(, $into:ty)?) => {
                     <$c_ty>::from_ne_bytes(repr.try_into().expect("repr slice is the same size as the type")) $(as $into)?
@@ -892,7 +944,7 @@ mod enabled {
                 FfiType::Struct(fields) => {
                     eprintln!("[DEBUG] FfiType::unrepr: struct branch");
                     FfiType::unrepr_struct(fields, repr)?
-                },
+                }
             })
         }
 
@@ -904,7 +956,11 @@ mod enabled {
         }
 
         fn repr_struct(fields: &[FfiType], value: Value) -> Result<Buffers, String> {
-            eprintln!("[DEBUG] FfiType::repr_struct: fields.len()={}, value.row_count()={}", fields.len(), value.row_count());
+            eprintln!(
+                "[DEBUG] FfiType::repr_struct: fields.len()={}, value.row_count()={}",
+                fields.len(),
+                value.row_count()
+            );
             if fields.len() != value.row_count() {
                 return Err(format!(
                     "Struct has {} fields, but passed array has {} rows",
@@ -914,7 +970,10 @@ mod enabled {
             }
 
             let ((size, _), offsets) = FfiType::struct_size_align_offsets(fields);
-            eprintln!("[DEBUG] FfiType::repr_struct: size={}, offsets={:?}", size, offsets);
+            eprintln!(
+                "[DEBUG] FfiType::repr_struct: size={}, offsets={:?}",
+                size, offsets
+            );
 
             let mut struct_repr = vec![0u8; size];
             let mut buffers = Vec::new();
@@ -924,8 +983,7 @@ mod enabled {
                 let (field_repr, buffer) = field_ty.repr(row)?;
                 buffers.extend(buffer.into_iter());
 
-                struct_repr[offset..offset + field_repr.len]
-                    .copy_from_slice(field_repr.as_slice());
+                struct_repr[offset..offset + field_repr.len].copy_from_slice(field_repr.as_slice());
             }
 
             eprintln!("[DEBUG] FfiType::repr_struct: struct packaging completed");
@@ -933,7 +991,11 @@ mod enabled {
         }
 
         fn unrepr_struct(fields: &[FfiType], repr: &[u8]) -> Result<Value, String> {
-            eprintln!("[DEBUG] FfiType::unrepr_struct: fields.len()={}, repr.len()={}", fields.len(), repr.len());
+            eprintln!(
+                "[DEBUG] FfiType::unrepr_struct: fields.len()={}, repr.len()={}",
+                fields.len(),
+                repr.len()
+            );
             let (_, offsets) = FfiType::struct_size_align_offsets(fields);
 
             let rows = zip(fields, offsets)
@@ -954,7 +1016,10 @@ mod enabled {
             let rank = value.shape.len();
             let is_list = rank == 1;
             let is_empty = value.row_count() == 0;
-            eprintln!("[DEBUG] FfiType::repr_arr: type={}, rank={}, is_empty={}, strings={}", self, rank, is_empty, strings);
+            eprintln!(
+                "[DEBUG] FfiType::repr_arr: type={}, rank={}, is_empty={}, strings={}",
+                self, rank, is_empty, strings
+            );
 
             macro_rules! arr {
                 ($arr:expr, $c_type:ty) => {{
