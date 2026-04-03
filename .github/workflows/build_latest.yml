@@ -81,11 +81,24 @@ jobs:
     runs-on: ubuntu-24.04-riscv
     steps:
       - uses: actions/checkout@v4
+      
       - name: Rust version
         id: rustv
         run: echo "version=$(rustc -V)" >> "$GITHUB_OUTPUT"
+        
       - name: Run ffi tests
-        run: cargo test -p tests_ffi
+        # RUST_BACKTRACE=full gives you the maximum crash info
+        # --nocapture prevents the Rust test runner from buffering/hiding output
+        # 2>&1 merges stderr into stdout so tee catches both
+        run: |
+          env RUST_BACKTRACE=full cargo test -p tests_ffi -- --nocapture 2>&1 | tee ffi_test.log
+          
+      - name: Upload test logs
+        if: always() # This ensures the log is uploaded EVEN IF the test segfaults/fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffi-test-logs
+          path: ffi_test.log
   # Build the site
   build_site:
     needs: test_site
