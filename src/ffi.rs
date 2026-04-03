@@ -574,21 +574,19 @@ mod enabled {
 
     /// This is an in-lined version of [`libffi::middle::Cif::call`] with the change that instead of using a generic to specify the size of memory that is copied into, it uses a parameter and a vector.
     pub unsafe fn call(cif: &Cif, fun: CodePtr, args: &[Arg], result_size: usize) -> Vec<u8> {
-        eprintln!("[DEBUG] call: result_size={}", result_size);
-        let mut result = vec![0; result_size];
-        eprintln!("[DEBUG] call: triggering libffi::raw::ffi_call");
-        unsafe {
-            libffi::raw::ffi_call(
-                cif.as_raw_ptr(),
-                Some(*fun.as_safe_fun()),
-                result.as_mut_ptr() as *mut c_void,
-                args.as_ptr() as *mut *mut c_void,
-            )
-        };
-        eprintln!("[DEBUG] call: ffi_call executed and returned successfully");
+        let scratch_size = result_size.max(std::mem::size_of::<usize>());
+        let mut result = vec![0u8; scratch_size];
+
+        libffi::raw::ffi_call(
+            cif.as_raw_ptr(),
+            Some(*fun.as_safe_fun()),
+            result.as_mut_ptr() as *mut c_void,
+            args.as_ptr() as *mut *mut c_void,
+        );
+
+        result.truncate(result_size);
         result
     }
-
     fn cstr_to_value(ptr: *const c_char) -> Result<Value, String> {
         eprintln!("[DEBUG] cstr_to_value: ptr={:p}", ptr);
         let cstr = unsafe { CStr::from_ptr(ptr) };
