@@ -1383,45 +1383,98 @@ pub(crate) fn run_sys_op(op: &SysOp, env: &mut Uiua) -> UiuaResult {
             env.push(arr);
         }
         SysOp::Ffi => {
+            eprintln!("[FFI] Entering SysOp::Ffi");
+
             let sig_def = env.pop(1)?;
+            eprintln!("[FFI] Popped signature definition: {:?}", sig_def);
+
             let sig_def = match sig_def {
-                Value::Box(arr) => arr,
+                Value::Box(arr) => {
+                    eprintln!("[FFI] Signature is a boxed array");
+                    arr
+                }
                 val => {
+                    eprintln!(
+                        "[FFI] Error: signature must be a box array, got {}",
+                        val.type_name_plural()
+                    );
                     return Err(env.error(format!(
                         "FFI signature must be a box array, but it is {}",
                         val.type_name_plural()
                     )));
                 }
             };
+
+            eprintln!("[FFI] Signature rank: {}", sig_def.rank());
             if sig_def.rank() != 1 {
+                eprintln!(
+                    "[FFI] Error: signature must be rank 1, got rank {}",
+                    sig_def.rank()
+                );
                 return Err(env.error(format!(
                     "FFI signature must be a rank 1 array, but it is rank {}",
                     sig_def.rank()
                 )));
             }
+
+            eprintln!("[FFI] Signature row count: {}", sig_def.row_count());
             if sig_def.row_count() < 3 {
+                eprintln!("[FFI] Error: signature array must have at least 3 elements");
                 return Err(env.error("FFI signature array must have at least two elements"));
             }
+
             let mut sig_frags = sig_def.data.into_iter().map(|b| b.0);
+
             let file_name =
                 (sig_frags.next().unwrap()).as_string(env, "FFI file name must be a string")?;
-            let result_ty = (sig_frags.next().unwrap())
-                .as_string(env, "FFI result type must be a string")?
-                .parse::<FfiType>()
-                .map_err(|e| env.error(e))?;
+            eprintln!("[FFI] File name: {}", file_name);
+
+            let result_ty_str =
+                (sig_frags.next().unwrap()).as_string(env, "FFI result type must be a string")?;
+            eprintln!("[FFI] Result type string: {}", result_ty_str);
+
+            let result_ty = result_ty_str.parse::<FfiType>().map_err(|e| {
+                eprintln!("[FFI] Error parsing result type: {}", e);
+                env.error(e)
+            })?;
+            eprintln!("[FFI] Parsed result type: {:?}", result_ty);
+
             let name = (sig_frags.next().unwrap()).as_string(env, "FFI name must be a string")?;
+            eprintln!("[FFI] Function name: {}", name);
+
             let arg_tys = sig_frags
                 .map(|frag| {
-                    frag.as_string(env, "FFI argument type must be a string")
-                        .and_then(|ty| ty.parse::<FfiArg>().map_err(|e| env.error(e)))
+                    let ty_str = frag.as_string(env, "FFI argument type must be a string")?;
+                    eprintln!("[FFI] Argument type string: {}", ty_str);
+                    ty_str.parse::<FfiArg>().map_err(|e| {
+                        eprintln!("[FFI] Error parsing argument type '{}': {}", ty_str, e);
+                        env.error(e)
+                    })
                 })
                 .collect::<UiuaResult<Vec<_>>>()?;
+            eprintln!("[FFI] Parsed argument types: {:?}", arg_tys);
+
             let args = env.pop(2)?;
+            eprintln!("[FFI] Raw args value: {:?}", args);
+
             let args: Vec<Value> = args.into_rows().map(Value::unpacked).collect();
+            eprintln!("[FFI] Unpacked args: {:?}", args);
+
+            eprintln!(
+                "[FFI] Calling backend.ffi(file_name={:?}, result_ty={:?}, name={:?}, arg_tys={:?}, args={:?})",
+                file_name, result_ty, name, arg_tys, args
+            );
+
             let result = (env.rt.backend)
                 .ffi(&file_name, result_ty, &name, &arg_tys, args)
-                .map_err(|e| env.error(e))?;
+                .map_err(|e| {
+                    eprintln!("[FFI] backend.ffi error: {}", e);
+                    env.error(e)
+                })?;
+
+            eprintln!("[FFI] Call succeeded, result: {:?}", result);
             env.push(result);
+            eprintln!("[FFI] Result pushed to stack");
         }
         SysOp::MemCopy => {
             let ptr = env
