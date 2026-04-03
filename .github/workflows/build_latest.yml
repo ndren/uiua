@@ -85,7 +85,20 @@ jobs:
       - name: Rust version
         id: rustv
         run: echo "version=$(rustc -V)" >> "$GITHUB_OUTPUT"
-        
+      - name: Cargo cache (registry+git)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-rg-${{ steps.rustv.outputs.version }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/build_latest.yml') }}
+      - name: Cargo cache (target)
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-target-host-${{ steps.rustv.outputs.version }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/build_latest.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-host-${{ steps.rustv.outputs.version }}-
       - name: Run ffi tests
         # RUST_BACKTRACE=full gives you the maximum crash info
         # --nocapture prevents the Rust test runner from buffering/hiding output
