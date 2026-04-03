@@ -3,6 +3,7 @@ use std::{
     str::FromStr,
 };
 
+
 /// Data for how to send an argument type to `&ffi`
 #[derive(Debug)]
 pub struct FfiArg {
